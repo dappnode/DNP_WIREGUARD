@@ -18,6 +18,7 @@ fi
 if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
 
   function fetchDappnodeDomain {
+    for i in {1..10}; do
         for domain in "$@"; do
           echo "**** Fetching DAppNode domain from $domain..."
           SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
@@ -26,6 +27,7 @@ if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
             fi
           sleep 2
         done
+    done
   }
 
   domains=("my.dappnode" "dappmanager.dappnode")

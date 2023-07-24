@@ -246,8 +246,8 @@ if [ -n "$PEERS" ]; then
   if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
 
     function fetchDappnodeDomain {
-      for domain in "$@"; do
-          for i in {1..30}; do
+      for i in {1..30}; do
+          for domain in "$@"; do
               echo "**** Fetching DAppNode domain from $domain..."
               SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
               if [ ! -z "$SERVERURL" ]; then
