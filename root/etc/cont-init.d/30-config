@@ -258,7 +258,7 @@ if [ -n "$PEERS" ]; then
       done
     }
 
-    domains=("my.dappnode" "dappmanager.dappnode" "172.33.1.7")
+    domains=("my.dappnode" "dappmanager.dappnode")
 
     fetchDappnodeDomain "${domains[@]}"
 
