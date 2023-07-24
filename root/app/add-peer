@@ -9,10 +9,17 @@ fi
 
 INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
 INTERFACE=$(echo "$INTERNAL_SUBNET" | awk 'BEGIN{FS=OFS="."} NF--')
+SERVERPORT=${SERVERPORT:-51820}
+
+if [ -z "$PEERDNS" ] || [ "$PEERDNS" = "auto" ]; then
+  PEERDNS="${INTERFACE}.1"
+fi
+
 if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
 
   function fetchDappnodeDomain {
         for domain in "$@"; do
+          echo "**** Fetching DAppNode domain from $domain..."
           SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
             if [ ! -z "$SERVERURL" ]; then
               break
@@ -25,10 +32,6 @@ if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
 
   fetchDappnodeDomain "${domains[@]}"
 
-fi
-SERVERPORT=${SERVERPORT:-51820}
-if [ -z "$PEERDNS" ] || [ "$PEERDNS" = "auto" ]; then
-  PEERDNS="${INTERFACE}.1"
 fi
 
 for i in {1..254}; do

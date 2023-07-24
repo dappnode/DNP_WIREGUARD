@@ -248,7 +248,7 @@ if [ -n "$PEERS" ]; then
     function fetchDappnodeDomain {
       for domain in "$@"; do
           for i in {1..30}; do
-              echo "**** Fetching DAppNode domain using $domain..."
+              echo "**** Fetching DAppNode domain from $domain..."
               SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
               if [ ! -z "$SERVERURL" ]; then
                   break 2
