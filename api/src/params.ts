@@ -1,6 +1,11 @@
 export const params = {
   MASTER_ADMIN: "dappnode_admin",
-  DAPPNODE_API_URL_GET_INTERNAL_IP: "http://my.dappnode/global-envs/INTERNAL_IP",
+  DAPPMANAGER_HOSTNAMES : [
+    "my.dappnode",
+    "dappmanager.dappnode",
+    "172.33.1.7"
+  ],
+  GET_INTERNAL_API_ENDPOINT: "/global-envs/INTERNAL_IP",
   SERVER_PORT: 51820,
   DATA_DIR: process.env.DATA_DIR || "/config",
   HELP_MESSAGE:

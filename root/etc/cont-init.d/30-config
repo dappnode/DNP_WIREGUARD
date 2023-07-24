@@ -244,13 +244,29 @@ if [ -n "$PEERS" ]; then
   fi
   PEERS_COUNT=$(echo "${#PEERS_ARRAY[@]}")
   if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
-    for i in {1..90}; do
-      echo "**** Fetching DAppNode domain..."
-      SERVERURL=$(curl -s my.dappnode/global-envs/HOSTNAME)
-      if [ ! -z $SERVERURL ]; then break; fi
-      sleep 2
-    done
-    echo "**** SERVERURL var is either not set or is set to \"auto\", setting external IP to auto detected value of $SERVERURL ****"
+
+    function fetchDappnodeDomain {
+      for domain in "$@"; do
+          for i in {1..30}; do
+              echo "**** Fetching DAppNode domain using $domain..."
+              SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
+              if [ ! -z "$SERVERURL" ]; then
+                  break 2
+              fi
+              sleep 2
+          done
+      done
+    }
+
+    domains=("my.dappnode" "dappmanager.dappnode" "172.33.1.7")
+
+    fetchDappnodeDomain "${domains[@]}"
+
+    if [ -z "$SERVERURL" ]; then
+        echo "**** SERVERURL var is either not set or is set to \"auto\", setting external IP to auto detected value of $SERVERURL  ****"
+    else
+        echo "**** SERVERURL var is set to $SERVERURL ****"
+    fi
   else
     echo "**** External server address is set to $SERVERURL ****"
   fi

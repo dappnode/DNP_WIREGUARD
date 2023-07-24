@@ -10,7 +10,21 @@ fi
 INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
 INTERFACE=$(echo "$INTERNAL_SUBNET" | awk 'BEGIN{FS=OFS="."} NF--')
 if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
-  SERVERURL=$(curl my.dappnode/global-envs/HOSTNAME)
+
+  function fetchDappnodeDomain {
+        for domain in "$@"; do
+          SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
+            if [ ! -z "$SERVERURL" ]; then
+              break
+            fi
+          sleep 2
+        done
+  }
+
+  domains=("my.dappnode" "dappmanager.dappnode" "172.33.1.7")
+
+  fetchDappnodeDomain "${domains[@]}"
+
 fi
 SERVERPORT=${SERVERPORT:-51820}
 if [ -z "$PEERDNS" ] || [ "$PEERDNS" = "auto" ]; then
