@@ -13,7 +13,8 @@ export async function createLocalConfigFile(device: string): Promise<string> {
     const remoteConfigFile = fs.readFileSync(remoteFilePath, "utf8");
     const localConfigFile = setLocalEndpoint(remoteConfigFile, localEndpoint);
 
-    if (localConfigFile === remoteConfigFile) throw Error("Error generating localConfigFile");
+    if (localConfigFile === remoteConfigFile)
+      throw Error("Error generating localConfigFile");
     return localConfigFile;
   } catch (e) {
     e.message = `Error creating localConfigFile: ${e.message}`;
@@ -24,30 +25,38 @@ export async function createLocalConfigFile(device: string): Promise<string> {
 // Utils
 
 async function getLocalIp(): Promise<string> {
+  const dappmanagerHostnames = params.DAPPMANAGER_HOSTNAMES;
+  const getLocalIpUrls = dappmanagerHostnames.map(
+    (hostname) => `http://${hostname}${params.GET_INTERNAL_API_ENDPOINT}`
+  );
 
-  const hostnames = params.DAPPMANAGER_HOSTNAMES;
-  const endpoint = params.GET_INTERNAL_API_ENDPOINT;
+  let errorMessages: string[] = [];
 
-  const urls = hostnames.map(hostname => `http://${hostname}${endpoint}`);
-
-  for (const url of urls) {
+  for (const url of getLocalIpUrls) {
     try {
       const localIp = await got(url).text();
-      if (!localIp) throw Error("localIp is empty");
-      if (!ipRegex({ exact: true }).test(localIp)) throw Error("Invalid localIp");
+      if (!localIp) throw Error("Local IP is empty");
+      if (!ipRegex({ exact: true }).test(localIp))
+        throw Error("Invalid local IP");
       return localIp;
     } catch (e) {
-      e.message = `Error fetching localIp: ${e.message}`;
-      throw e;
+      errorMessages.push(
+        `Local IP could not be fetched from ${url}: ${e.message}`
+      );
     }
   }
-  throw Error("Failed to fetch localIp.");
+  throw Error(errorMessages.join("\n"));
 }
 
-export function setLocalEndpoint(configFile: string, localEndpoint: string): string {
+export function setLocalEndpoint(
+  configFile: string,
+  localEndpoint: string
+): string {
   return configFile
     .split("\n")
-    .map((row) => (row.startsWith("Endpoint =") ? `Endpoint = ${localEndpoint}` : row))
+    .map((row) =>
+      row.startsWith("Endpoint =") ? `Endpoint = ${localEndpoint}` : row
+    )
     .join("\n");
 }
 
