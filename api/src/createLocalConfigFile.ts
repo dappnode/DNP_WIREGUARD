@@ -27,7 +27,7 @@ export async function createLocalConfigFile(device: string): Promise<string> {
 async function getLocalIp(): Promise<string> {
   const dappmanagerHostnames = params.DAPPMANAGER_HOSTNAMES;
   const getLocalIpUrls = dappmanagerHostnames.map(
-    (hostname) => `http://${hostname}${params.GET_INTERNAL_API_ENDPOINT}`
+    (hostname) => `http://${hostname}${params.GET_INTERNAL_IP_ENDPOINT}`
   );
 
   let errorMessages: string[] = [];
