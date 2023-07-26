@@ -7,7 +7,7 @@ import { params } from "./params";
 export async function createLocalConfigFile(device: string): Promise<string> {
   try {
     const remoteFilePath = getRemoteConfigFilePath(device, "conf");
-    const localIp = await getLocalIp();
+    const localIp = await getLocalIpWithRetries(30);
     const localEndpoint = `${localIp}:${params.SERVER_PORT}`;
 
     const remoteConfigFile = fs.readFileSync(remoteFilePath, "utf8");
@@ -23,6 +23,22 @@ export async function createLocalConfigFile(device: string): Promise<string> {
 }
 
 // Utils
+
+async function getLocalIpWithRetries(retries: number): Promise<string> {
+  // An integer n >= 1
+  retries = Math.max(Math.floor(retries), 1);
+
+  for (let i = 0; i < retries - 1; i++) {
+    try {
+      return await getLocalIp();
+    } catch (e) {
+      console.log(`Error getting local IP: ${e.message}`);
+      console.log(`Retrying... (${i + 1}/${retries})`);
+    }
+  }
+
+  return await getLocalIp();
+}
 
 async function getLocalIp(): Promise<string> {
   const dappmanagerHostnames = params.DAPPMANAGER_HOSTNAMES;
