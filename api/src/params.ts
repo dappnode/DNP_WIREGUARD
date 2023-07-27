@@ -1,6 +1,6 @@
 export const params = {
   MASTER_ADMIN: "dappnode_admin",
-  DAPPMANAGER_HOSTNAMES: ["my.dappnode", "dappmanager.dappnode"],
+  DAPPMANAGER_HOSTNAMES: ["my.dappnode", "dappmanager.dappnode", "172.33.1.7"], // TODO: Remove dappmanager IP when IP migration is performed
   GET_INTERNAL_IP_ENDPOINT: "/global-envs/INTERNAL_IP",
   SERVER_PORT: 51820,
   DATA_DIR: process.env.DATA_DIR || "/config",
