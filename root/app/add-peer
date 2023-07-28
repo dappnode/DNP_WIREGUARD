@@ -9,12 +9,32 @@ fi
 
 INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
 INTERFACE=$(echo "$INTERNAL_SUBNET" | awk 'BEGIN{FS=OFS="."} NF--')
-if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
-  SERVERURL=$(curl my.dappnode/global-envs/HOSTNAME)
-fi
 SERVERPORT=${SERVERPORT:-51820}
+
 if [ -z "$PEERDNS" ] || [ "$PEERDNS" = "auto" ]; then
   PEERDNS="${INTERFACE}.1"
+fi
+
+if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
+
+  function fetchDappnodeDomain {
+    for i in {1..10}; do
+        for domain in "$@"; do
+          echo "**** Fetching DAppNode domain from $domain..."
+          SERVERURL=$(curl -s "$domain/global-envs/HOSTNAME")
+            if [ ! -z "$SERVERURL" ]; then
+              break
+            fi
+          sleep 2
+        done
+    done
+  }
+
+  # TODO: Remove IP when the IP migration is performed
+  domains=("my.dappnode" "dappmanager.dappnode" "172.33.1.7")
+
+  fetchDappnodeDomain "${domains[@]}"
+
 fi
 
 for i in {1..254}; do
