@@ -31,7 +31,7 @@ if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
   }
 
   # TODO: Remove IP when the IP migration is performed
-  domains=("my.dappnode" "dappmanager.dappnode" "172.33.1.7")
+  domains=("my.dappnode" "dappmanager.dappnode")
 
   fetchDappnodeDomain "${domains[@]}"
 
