@@ -19,6 +19,7 @@ if [ -z "$SERVERURL" ] || [ "$SERVERURL" = "auto" ]; then
 
   # If _DAPPNODE_GLOBAL_HOSTNAME is set, use it as SERVERURL
   if [ ! -z "$_DAPPNODE_GLOBAL_HOSTNAME" ]; then
+    echo "**** _DAPPNODE_GLOBAL_HOSTNAME is set, using it as SERVERURL ****"
     SERVERURL="$_DAPPNODE_GLOBAL_HOSTNAME"
   else
     function fetchDappnodeDomain {
