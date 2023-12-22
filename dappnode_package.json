@@ -16,5 +16,11 @@
     "type": "git",
     "url": "https://github.com/dappnode/DNP_WIREGUARD.git"
   },
-  "license": "GPL-3.0"
+  "license": "GPL-3.0",
+  "globalEnvs": [
+    {
+      "envs": ["HOSTNAME"],
+      "services": ["wireguard"]
+    }
+  ]
 }
