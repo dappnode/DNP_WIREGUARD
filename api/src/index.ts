@@ -8,7 +8,10 @@ import {
 const port = process.env.SERVER_PORT || 80;
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: "http://my.dappnode"
+}
+app.use(cors(corsOptions));
 
 // - remote:    '/dappnode_admin'
 // - remote qr: '/dappnode_admin?qr'
