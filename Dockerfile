@@ -15,13 +15,11 @@ RUN \
   apk add --no-cache --virtual=build-dependencies \
     build-base \
     elfutils-dev \
-    gcc \
     git \
     linux-headers && \
   apk add --no-cache \
     bc \
     coredns \
-    gnupg \
     grep \
     iproute2 \
     iptables \
@@ -30,8 +28,7 @@ RUN \
     libcap-utils \
     libqrencode \
     net-tools \
-    openresolv \
-    perl && \
+    openresolv && \
   echo "wireguard" >> /etc/modules && \
   echo "**** install wireguard-tools ****" && \
   if [ -z ${WIREGUARD_RELEASE+x} ]; then \
@@ -45,6 +42,8 @@ RUN \
   sed -i 's|\[\[ $proto == -4 \]\] && cmd sysctl -q net\.ipv4\.conf\.all\.src_valid_mark=1|[[ $proto == -4 ]] \&\& [[ $(sysctl -n net.ipv4.conf.all.src_valid_mark) != 1 ]] \&\& cmd sysctl -q net.ipv4.conf.all.src_valid_mark=1|' src/wg-quick/linux.bash && \
   make -C src -j$(nproc) && \
   make -C src install && \
+  rm -rf /etc/wireguard && \
+  ln -s /config/wg_confs /etc/wireguard && \
   echo "**** clean up ****" && \
   apk del --no-network build-dependencies && \
   rm -rf \
