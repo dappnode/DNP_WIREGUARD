@@ -10,7 +10,6 @@
     "start": "node ./dist/server.js",
     "lint": "eslint . --ext .ts"
   },
-  "author": "lg@shardlabs.io",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",

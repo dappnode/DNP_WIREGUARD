@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "description": "Wireguard for DAppNode",
   "type": "dncore",
-  "author": "Shardlabs",
+  "author": "DAppNode Association <admin@dappnode.io> (https://github.com/dappnode)",
   "categories": ["Developer tools"],
   "architectures": ["linux/amd64", "linux/arm64"],
   "links": {

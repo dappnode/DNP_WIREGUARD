@@ -35,7 +35,7 @@ $(cat /config/templates/server.conf)
 
 DUDE"
     for i in "${PEERS_ARRAY[@]}"; do
-        if [[ ! "${i}" =~ ^[[:alnum:]]+$ ]]; then
+        if [[ ! "${i}" =~ ^[[:alnum:]_]+$ ]]; then
             echo "**** Peer ${i} contains non-alphanumeric characters and thus will be skipped. No config for peer ${i} will be generated. ****"
         else
             if [[ "${i}" =~ ^[0-9]+$ ]]; then
