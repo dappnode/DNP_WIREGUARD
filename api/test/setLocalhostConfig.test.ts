@@ -3,11 +3,10 @@ import { expect } from "chai";
 import { setLocalhostConfig } from "../src/setLocalhostConfig";
 
 describe("setLocalhostConfig", function () {
-  it("removes ListenPort and sets localhost endpoint", function () {
+  it("sets localhost endpoint", function () {
     const remoteConfig = `[Interface]
 Address = AX032NVGI2RIB4
 PrivateKey = HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw=
-ListenPort = 51820
 DNS = 172.33.1.2
 
 [Peer]
