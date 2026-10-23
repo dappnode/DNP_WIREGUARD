@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/linuxserver/baseimage-alpine:3.23
+FROM ghcr.io/linuxserver/baseimage-alpine:3.23@sha256:5fda400ad9d913b018cfa5a20b2c2ca16a5ff5c711a8bd47d35e08329647bf81
 
 # set version label
 ARG BUILD_DATE
@@ -11,13 +11,11 @@ LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DA
 LABEL maintainer="thespad"
 
 RUN \
-  if [ -z "${WIREGUARD_RELEASE+x}" ]; then \
-  WIREGUARD_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp \
-    && awk '/^P:wireguard-tools$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://'); \
-  fi && \
   echo "**** install dependencies ****" && \
   apk add --no-cache \
     bc \
+    'ca-certificates>=20261020-r0' \
+    'ca-certificates-bundle>=20261020-r0' \
     coredns \
     grep \
     iproute2 \
@@ -30,7 +28,8 @@ RUN \
     net-tools \
     nftables \
     openresolv \
-    wireguard-tools==${WIREGUARD_RELEASE} && \
+    "wireguard-tools${WIREGUARD_RELEASE:+==${WIREGUARD_RELEASE}}" && \
+  update-ca-certificates && \
   echo "wireguard" >> /etc/modules && \
   sed -i 's|\[\[ $proto == -4 \]\] && cmd sysctl -q net\.ipv4\.conf\.all\.src_valid_mark=1|[[ $proto == -4 ]] \&\& [[ $(sysctl -n net.ipv4.conf.all.src_valid_mark) != 1 ]] \&\& cmd sysctl -q net.ipv4.conf.all.src_valid_mark=1|' /usr/bin/wg-quick && \
   rm -rf /etc/wireguard && \

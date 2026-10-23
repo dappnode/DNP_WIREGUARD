@@ -1,17 +1,21 @@
-FROM node:12-alpine AS builder
+FROM node:24.22.1-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS base
+RUN apk add --no-cache \
+    'ca-certificates>=20261020-r0' \
+    'ca-certificates-bundle>=20261020-r0' && \
+    update-ca-certificates
+
+FROM base AS builder
 WORKDIR /app
 COPY . .
-RUN yarn
-RUN yarn build
+RUN yarn --frozen-lockfile
+RUN yarn build && yarn test
 
-RUN rm -rf node_modules && yarn --production
+RUN rm -rf node_modules && yarn --production --frozen-lockfile
 
 
 # Our Second stage, that creates an image for production
-FROM alpine
+FROM base
 WORKDIR /app
-
-RUN apk add --update --no-cache nodejs
 
 COPY --from=builder /app/dist/ ./
 COPY --from=builder /app/node_modules/ ./node_modules
