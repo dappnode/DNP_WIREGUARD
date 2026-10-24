@@ -5,6 +5,10 @@ services:
     image: "wireguard.wireguard.dnp.dappnode.eth:0.1.1"
     container_name: DAppNodeCore-wireguard.wireguard.dnp.dappnode.eth
     restart: unless-stopped
+    # Keep Docker aliases while using Dappnode DNS for external lookups.
+    dns:
+      - 172.33.1.2
+      - 10.20.0.2
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
