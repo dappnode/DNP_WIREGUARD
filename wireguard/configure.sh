@@ -4,7 +4,6 @@ set -euo pipefail
 umask 077
 shopt -s nullglob
 data=${DATA_DIR:-/config}
-here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 fail() { echo "WireGuard configuration: $*" >&2; exit 1; }
 [[ $# == 0 || ( $# == 1 && $1 == --preflight ) ]] || fail 'Supported option: --preflight'
 ipv4() {
@@ -17,31 +16,10 @@ ipv4() {
     done
 }
 
-[[ ${PEERS+x} ]] || fail 'Client mode is unsupported. Keep the previous image for client-mode configurations.'
+[[ ${PEERS+x} ]] || fail 'PEERS must be set to a comma-separated device list (or an empty list).'
 [[ ${USE_COREDNS:-false} == false ]] || fail 'CoreDNS is no longer included. Configure PEERDNS to use Dappnode BIND.'
 [[ ${PEERDNS:-} != auto ]] || fail 'PEERDNS=auto requires the previous image. Set explicit DNS servers before migrating.'
-[[ ${PUID:-1000} =~ ^[0-9]+$ && ${PGID:-1000} =~ ^[0-9]+$ ]] || fail 'PUID and PGID must be numeric.'
-for template in server.conf peer.conf; do
-    file="$data/templates/$template"
-    if [[ -f $file ]]; then
-        references=("$here/legacy/$template")
-        if [[ $template == peer.conf ]]; then references+=("$here/legacy/peer-with-listen-port.conf"); fi
-        matched=false
-        for reference in "${references[@]}"; do
-            if cmp -s "$file" "$reference"; then
-                matched=true
-            elif [[ $template == peer.conf ]] && cmp -s "$file" <(sed '/^PresharedKey =/d' "$reference"); then
-                matched=true
-            fi
-        done
-        $matched || fail "Custom template $file requires manual migration; no configuration was changed."
-    fi
-done
-if [[ -f $data/coredns/Corefile ]] &&
-    ! cmp -s "$data/coredns/Corefile" "$here/legacy/Corefile" &&
-    ! cmp -s "$data/coredns/Corefile" "$here/legacy/Corefile-without-errors"; then
-    fail 'A custom CoreDNS configuration requires manual migration.'
-fi
+[[ -z ${PERSISTENTKEEPALIVE_PEERS:-} ]] || fail 'PERSISTENTKEEPALIVE_PEERS is unsupported.'
 for file in "$data"/wg_confs/*.conf; do
     [[ ${file##*/} == wg0.conf ]] || fail 'Additional tunnels require the previous image or manual migration.'
 done
@@ -58,8 +36,6 @@ dns=${PEERDNS:-172.33.1.2,10.20.0.2}
 allowed=${ALLOWEDIPS:-172.33.0.0/16,10.20.0.0/24}
 [[ $dns =~ ^[a-zA-Z0-9.:,\ _-]+$ ]] || fail 'Invalid PEERDNS.'
 [[ $allowed =~ ^[a-fA-F0-9.:/,\ ]+$ ]] || fail 'Invalid ALLOWEDIPS.'
-keepalive=${PERSISTENTKEEPALIVE_PEERS:-}
-[[ $keepalive =~ ^[a-zA-Z0-9_,\ ]*$ ]] || fail 'Invalid PERSISTENTKEEPALIVE_PEERS.'
 host=${SERVERURL:-${_DAPPNODE_GLOBAL_HOSTNAME:-}}
 if [[ -z $host || $host == auto ]]; then
     host=${_DAPPNODE_GLOBAL_HOSTNAME:-}
@@ -96,25 +72,33 @@ for i in "${peers[@]}"; do
     seen[$i]=1
     extra_name="SERVER_ALLOWEDIPS_PEER_$i"
     extra=${!extra_name:-}
-    [[ -z $extra || $extra =~ ^[a-fA-F0-9.:/,\ ]+$ ]] || fail "Invalid $extra_name."
+    [[ -z $extra ]] || fail "$extra_name is unsupported."
 done
 ((${#peers[@]} <= 253)) || fail 'At most 253 peers are supported.'
 
 server_conf="$data/wg_confs/wg0.conf"
 if [[ ! -e $server_conf && -f $data/wg0.conf ]]; then server_conf="$data/wg0.conf"; fi
+post_up='iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE'
+post_down='iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE'
 if [[ -f $server_conf ]]; then
     [[ -s $data/server/privatekey-server ]] || fail 'Existing server key is missing; refusing to replace its identity.'
     [[ $(sed -n 's/^PrivateKey = //p' "$server_conf") == "$(cat "$data/server/privatekey-server")" ]] || fail 'Saved server configuration and private key disagree.'
     # Custom lifecycle commands and interface extensions must not be discarded.
     while IFS= read -r line; do
         case $line in
-            ''|'#'*|'[Interface]'|'[Peer]'|Address\ =*|ListenPort\ =*|PrivateKey\ =*|PublicKey\ =*|PresharedKey\ =*|AllowedIPs\ =*|PersistentKeepalive\ =*) ;;
-            PostUp\ =*|PostDown\ =*) grep -Fxq "$line" "$here/legacy/server.conf" || fail 'Custom firewall hooks require manual migration.' ;;
+            ''|'#'*|'[Interface]'|'[Peer]'|Address\ =*|ListenPort\ =*|PrivateKey\ =*|PublicKey\ =*|PresharedKey\ =*|AllowedIPs\ =*) ;;
+            "PostUp = $post_up"|"PostDown = $post_down") ;;
             *) fail 'Custom server configuration requires manual migration.' ;;
         esac
     done < "$server_conf"
 fi
 for file in "$data"/peer*/peer*.conf; do
+    while IFS= read -r line; do
+        case $line in
+            ''|'#'*|'[Interface]'|'[Peer]'|Address\ =*|ListenPort\ =*|PrivateKey\ =*|DNS\ =*|PublicKey\ =*|PresharedKey\ =*|Endpoint\ =*|AllowedIPs\ =*) ;;
+            *) fail 'Custom client configuration requires manual migration.' ;;
+        esac
+    done < "$file"
     address=$(sed -n 's/^Address[[:space:]]*=[[:space:]]*//p' "$file")
     address=${address%/32}
     ipv4 "$address" || fail "Invalid saved peer address in $file."
@@ -156,8 +140,8 @@ cat > "$stage/wg_confs/wg0.conf" <<EOF
 Address = $prefix.1
 ListenPort = $port
 PrivateKey = $KEY_PRIVATE
-PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE
+PostUp = $post_up
+PostDown = $post_down
 
 EOF
 for i in "${peers[@]}"; do
@@ -209,10 +193,7 @@ EOF
     {
         printf '[Peer]\n# %s\nPublicKey = %s\n' "$peer" "$KEY_PUBLIC"
         [[ -z $psk ]] || printf 'PresharedKey = %s\n' "$psk"
-        extra_name="SERVER_ALLOWEDIPS_PEER_$i"
-        extra=${!extra_name:-}
-        printf 'AllowedIPs = %s.%s/32%s\n' "$prefix" "$last" "${extra:+,$extra}"
-        if [[ ,${keepalive// /}, == *,all,* || ,${keepalive// /}, == *,"$i",* ]]; then printf 'PersistentKeepalive = 25\n'; fi
+        printf 'AllowedIPs = %s.%s/32\n' "$prefix" "$last"
         printf '\n'
     } >> "$stage/wg_confs/wg0.conf"
     qrencode -l L -o "$stage/$peer/$peer.png" < "$stage/$peer/$peer.conf"
@@ -224,6 +205,8 @@ if [[ -n ${WG_VALIDATE_INTERFACE:-} ]]; then
     fi
     rm "$stage/kernel-error"
 fi
+# Keep sanitized metadata solely so the installed Dappnode image can roll back.
+# This renderer never reads or evaluates it.
 cat > "$stage/.donoteditthisfile" <<EOF
 ORIG_SERVERURL="$host"
 ORIG_SERVERPORT="$port"
@@ -231,16 +214,16 @@ ORIG_PEERDNS="$dns"
 ORIG_PEERS="$PEERS"
 ORIG_INTERFACE="$prefix"
 ORIG_ALLOWEDIPS="$allowed"
-ORIG_PERSISTENTKEEPALIVE_PEERS="$keepalive"
+ORIG_PERSISTENTKEEPALIVE_PEERS=""
 EOF
 publish() {
     local source=$1 relative=${1#"$stage/"} target
     target="$data/$relative"
     mkdir -p "$(dirname "$target")"
-    chown "${PUID:-1000}:${PGID:-1000}" "$source"
+    chown 1000:1000 "$source"
     chmod 600 "$source"
     if [[ -f $target ]] && cmp -s "$source" "$target"; then
-        chown "${PUID:-1000}:${PGID:-1000}" "$target"
+        chown 1000:1000 "$target"
         chmod 600 "$target"
     else mv -f -- "$source" "$target"; fi
 }

@@ -1,3 +1,5 @@
+# Required by the Dappnode SDK validator.
+version: "3.5"
 services:
   wireguard:
     build: .
@@ -9,8 +11,6 @@ services:
     environment:
       - PEERS=dappnode_admin
       - SERVERURL=
-      - PUID=1000
-      - PGID=1000
       - SERVERPORT=51820
       - LOG_CONFS=false
       - "PEERDNS=172.33.1.2,10.20.0.2"

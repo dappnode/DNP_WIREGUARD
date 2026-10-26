@@ -53,7 +53,7 @@ export function readConfig(
       .filter((line) => /^# peer_?\w+$/.test(line))
       .map((line) => line.slice(2)),
   );
-  // Older numeric PEERS configurations use peer1, named peers use peer_name.
+  // Numeric PEERS counts use peer1; explicitly named peers use peer_name.
   const candidates = [`peer_${device}`];
   if (/^\d+$/.test(device)) candidates.push(`peer${device}`);
   const peer = candidates.find((name) => activePeers.has(name));

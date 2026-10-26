@@ -48,13 +48,10 @@ Its config volume is read-only. The VPN service is the only config writer.
 | `PEERDNS` | `172.33.1.2,10.20.0.2` (Dappnode BIND); explicit servers only. |
 | `INTERNAL_SUBNET` | `10.24.0.0`; IPv4 /24 addressing, preserving existing host IDs. |
 | `ALLOWEDIPS` | `172.33.0.0/16,10.20.0.0/24`; client-side routed ranges. |
-| `SERVER_ALLOWEDIPS_PEER_<name>` | Optional additional server-side routes for that peer. |
-| `PERSISTENTKEEPALIVE_PEERS` | Optional comma-separated names or `all`; 25 seconds. |
-| `PUID`, `PGID` | `1000`; generated config and key files are owned by these IDs, mode 0600. |
 | `LOG_CONFS` | Credential contents are never logged. Use the credential CLI explicitly. |
 
-`WIREGUARD_RELEASE` remains a build argument for an explicit Alpine tools version.
-APK chooses a signed package for the target architecture when it is omitted.
+Generated files belong to Dappnode's UID/GID `1000:1000`, mode `0600`.
+APK selects signed WireGuard tools for the target architecture.
 Both images require CA bundles at least `20261020-r0` for RHSB-2026-012; Node is
 pinned to the patched 24.22.1 LTS image.
 
@@ -66,20 +63,23 @@ by `wg setconf` against a temporary interface, and individually replaced by
 atomic rename; the server config is published last. Identical files are not
 rewritten. Existing PSK-less clients stay PSK-less. Missing identities and
 inconsistent key/config pairs fail instead of generating replacement identities.
-Persisted `.donoteditthisfile` content is never executed.
+Persisted `.donoteditthisfile` content is never read or executed. A sanitized
+copy is written only so the currently installed Dappnode image can roll back.
 
 The refactor is Dappnode server-only. Preflight rejects the following before
 publishing configs, rather than silently dropping unsupported behavior:
 
-- Client mode (no `PEERS` variable), additional tunnel files and custom templates.
-- `PEERDNS=auto`, clients pointing at the former VPN/CoreDNS address, and custom
-  CoreDNS configurations. Move DNS to explicit BIND servers using the previous
+- Client mode (no `PEERS` variable) and additional tunnel files.
+- `PEERDNS=auto` and clients pointing at the former VPN/CoreDNS address.
+  Move DNS to explicit BIND servers using the previous
   release and redistribute changed client configs before migrating.
-- Custom server firewall hooks/interface extensions and symlinks in the volume.
+- Custom server/client options, firewall hooks and symlinks in the volume.
+- `SERVER_ALLOWEDIPS_PEER_<name>` and `PERSISTENTKEEPALIVE_PEERS` overrides.
 
-Default legacy templates, including older profiles with `ListenPort = 51820`,
-and the old `/config/wg0.conf` location are recognized. Existing client listen
-ports are retained.
+Older numeric peer folders, existing client listen ports and the old
+`/config/wg0.conf` location are retained for upgrade compatibility. Saved template
+and CoreDNS files no longer control generation; they are left untouched for
+rollback. The runtime ships no template fixtures or template matching logic.
 Keep a backup of the volume and previous images before upgrading. An unsupported
 installation should remain on its previous image until its customization has
 been reviewed. The previous image can reuse the same config volume for rollback;
@@ -130,5 +130,4 @@ Set `WIREGUARD_LEGACY_LISTEN_PORT=1` with the old baseline image to also exercis
 the historical stock peer template and CoreDNS file retained in older installations.
 
 The previous package was derived from [LinuxServer's WireGuard image](https://github.com/linuxserver/docker-wireguard).
-The legacy template fixtures retain its format for migration checks. See
-[LICENSE](LICENSE) for repository licensing.
+See [LICENSE](LICENSE) for repository licensing.

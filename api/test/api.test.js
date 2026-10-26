@@ -141,10 +141,14 @@ test("removed peers, traversal and symlinks cannot expose credentials", (t) => {
   });
 });
 
-test("numeric legacy peer folders remain readable", (t) => {
+test("numeric legacy and named peer folders remain readable", (t) => {
   const dataDir = fixture(t);
   fs.mkdirSync(path.join(dataDir, "peer1"));
   fs.writeFileSync(path.join(dataDir, "peer1/peer1.conf"), config);
+  assert.equal(readConfig("1", { dataDir }), config);
+  fs.appendFileSync(path.join(dataDir, "wg_confs/wg0.conf"), "# peer_1\n");
+  fs.mkdirSync(path.join(dataDir, "peer_1"));
+  fs.writeFileSync(path.join(dataDir, "peer_1/peer_1.conf"), config);
   assert.equal(readConfig("1", { dataDir }), config);
 });
 

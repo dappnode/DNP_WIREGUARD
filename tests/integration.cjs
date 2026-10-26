@@ -14,8 +14,9 @@ const baseline = process.env.WIREGUARD_BASELINE_IMAGE || image;
 const baselineApi = process.env.WIREGUARD_BASELINE_API_IMAGE;
 const legacyListenPort = process.env.WIREGUARD_LEGACY_LISTEN_PORT === "1";
 const prefix = `wg-refactor-${process.pid}-${Date.now()}`;
-const network = `${prefix}-network`,
-  volume = `${prefix}-config`;
+const network = `${prefix}-network`;
+let volume = `${prefix}-config`;
+const volumes = [volume];
 const server = `${prefix}-server`,
   client = `${prefix}-client`,
   api = `${prefix}-api`,
@@ -73,10 +74,6 @@ function startServer(tag, peers = "dappnode_admin") {
     "-e",
     "SERVERPORT=51820",
     "-e",
-    "PUID=1000",
-    "-e",
-    "PGID=1000",
-    "-e",
     "INTERNAL_SUBNET=10.24.0.0",
     "-e",
     `PEERDNS=${backendIp}`,
@@ -98,11 +95,11 @@ async function ready() {
     "server readiness",
   );
 }
-function identity() {
+function identity(peer = "peer_dappnode_admin") {
   return inside(server, [
     "/bin/sh",
     "-ec",
-    "sha256sum /config/server/* /config/peer_dappnode_admin/*key*; grep '^Address =' /config/peer_dappnode_admin/peer_dappnode_admin.conf",
+    `sha256sum /config/server/* /config/${peer}/*key*; grep '^Address =' /config/${peer}/${peer}.conf`,
   ]);
 }
 function traffic() {
@@ -119,6 +116,29 @@ function reconnect() {
     "-ec",
     "wg-quick down /tmp/wg0.conf; wg-quick up /tmp/wg0.conf",
   ]);
+}
+function startClient(config) {
+  docker([
+    "run",
+    "-d",
+    "--name",
+    client,
+    "--network",
+    network,
+    "--cap-add",
+    "NET_ADMIN",
+    "--entrypoint",
+    "/bin/sh",
+    image,
+    "-c",
+    "sleep 1800",
+  ]);
+  inside(
+    client,
+    ["/bin/sh", "-ec", "cat > /tmp/wg0.conf; chmod 600 /tmp/wg0.conf"],
+    config.replace(/^DNS =.*\n/m, "") + "\n",
+  );
+  inside(client, ["wg-quick", "up", "/tmp/wg0.conf"]);
 }
 async function replaceServer(tag, peers, forceReconnect = true) {
   docker(["stop", server]);
@@ -140,13 +160,13 @@ function startApi(tag) {
     tag,
   ]);
 }
-async function apiReady() {
+async function apiReady(device = "dappnode_admin") {
   await until(
     () =>
       inside(api, [
         "node",
         "-e",
-        "fetch('http://127.0.0.1/dappnode_admin').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        `fetch('http://127.0.0.1/${device}').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))`,
       ]) === "",
     "API readiness",
   );
@@ -161,6 +181,12 @@ console.log('API/CLI modes passed');})().catch(e=>{console.error(e.message);proc
 (async () => {
   try {
     docker(["network", "create", "--internal", network]);
+    // Let Docker choose a free subnet, then make it explicit. Older daemons
+    // reject static container IPs when the network used automatic IPAM.
+    const subnet = JSON.parse(docker(["network", "inspect", network]))[0].IPAM
+      .Config[0].Subnet;
+    docker(["network", "rm", network]);
+    docker(["network", "create", "--internal", "--subnet", subnet, network]);
     docker(["volume", "create", volume]);
     docker([
       "create",
@@ -209,27 +235,7 @@ console.log('API/CLI modes passed');})().catch(e=>{console.error(e.message);proc
       "/config/peer_dappnode_admin/peer_dappnode_admin.conf",
     ]);
     // The peer is an independent Linux client, not the removed package client mode.
-    docker([
-      "run",
-      "-d",
-      "--name",
-      client,
-      "--network",
-      network,
-      "--cap-add",
-      "NET_ADMIN",
-      "--entrypoint",
-      "/bin/sh",
-      image,
-      "-c",
-      "sleep 1800",
-    ]);
-    inside(
-      client,
-      ["/bin/sh", "-ec", "cat > /tmp/wg0.conf; chmod 600 /tmp/wg0.conf"],
-      originalConfig.replace(/^DNS =.*\n/m, "") + "\n",
-    );
-    inside(client, ["wg-quick", "up", "/tmp/wg0.conf"]);
+    startClient(originalConfig);
     traffic();
     checks.push("baseline handshake and encrypted traffic");
     if (baselineApi) {
@@ -359,6 +365,66 @@ console.log('API/CLI modes passed');})().catch(e=>{console.error(e.message);proc
       checks.push(
         "rollback to deployed image and roll-forward preserve access",
       );
+
+      // Exercise a separate old numeric installation, never converting its
+      // peer1 directories into named peers or generating replacement keys.
+      docker(["rm", "-f", client]);
+      docker(["stop", server]);
+      docker(["rm", server]);
+      volume = `${prefix}-numeric-config`;
+      volumes.push(volume);
+      docker(["volume", "create", volume]);
+      startServer(baseline, "2");
+      await ready();
+      const numericIdentity = identity("peer1");
+      const numericConfig = inside(server, ["cat", "/config/peer1/peer1.conf"]);
+      startClient(numericConfig);
+      traffic();
+      await replaceServer(image, "2", false);
+      await until(() => {
+        traffic();
+        return true;
+      }, "numeric upgrade reconnect");
+      assert.equal(
+        identity("peer1"),
+        numericIdentity,
+        "numeric identity changed",
+      );
+      assert.ok(
+        inside(server, ["cat", "/config/peer1/peer1.conf"]) === numericConfig,
+        "numeric client profile changed",
+      );
+      docker(["rm", "-f", api]);
+      startApi(apiImage);
+      await apiReady("1");
+      await replaceServer(image, "1");
+      inside(api, [
+        "node",
+        "-e",
+        "fetch('http://127.0.0.1/2').then(r=>process.exit(r.status===404?0:1))",
+      ]);
+      await replaceServer(image, "2");
+      assert.equal(
+        identity("peer1"),
+        numericIdentity,
+        "numeric resize changed identity",
+      );
+      assert.ok(
+        inside(server, ["/app/show-peer", "1"]).includes("\x1b["),
+        "numeric CLI QR failed",
+      );
+      await replaceServer(baseline, "2");
+      traffic();
+      await replaceServer(image, "2");
+      traffic();
+      assert.equal(
+        identity("peer1"),
+        numericIdentity,
+        "numeric rollback changed identity",
+      );
+      checks.push(
+        "old numeric PEERS upgrade, resize, API/CLI, rollback and roll-forward",
+      );
     }
     for (const tag of [image, apiImage]) {
       const bundle = docker([
@@ -419,10 +485,12 @@ console.log('API/CLI modes passed');})().catch(e=>{console.error(e.message);proc
         /* Absent after failed startup. */
       }
     }
-    try {
-      docker(["volume", "rm", volume]);
-    } catch {
-      /* Reported by the final cleanup check when applicable. */
+    for (const testVolume of volumes) {
+      try {
+        docker(["volume", "rm", testVolume]);
+      } catch {
+        /* Reported by the final cleanup check when applicable. */
+      }
     }
     try {
       docker(["network", "rm", network]);

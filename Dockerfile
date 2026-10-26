@@ -1,10 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
-ARG WIREGUARD_RELEASE
 RUN apk add --no-cache \
     bash curl iproute2 iptables ip6tables libqrencode-tools tini \
     'ca-certificates>=20261020-r0' 'ca-certificates-bundle>=20261020-r0' \
-    "wireguard-tools${WIREGUARD_RELEASE:+==${WIREGUARD_RELEASE}}" && \
+    wireguard-tools && \
     update-ca-certificates && \
     mkdir -p /config /app && \
     rm -rf /etc/wireguard && ln -s /config/wg_confs /etc/wireguard
