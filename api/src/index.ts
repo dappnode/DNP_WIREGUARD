@@ -1,55 +1,100 @@
-import express, { ErrorRequestHandler } from "express";
-import cors from "cors";
+import http, { type Server } from "node:http";
+import fs from "node:fs";
+import path from "node:path";
 import {
-  createLocalConfigFile,
-  getRemoteConfigFilePath,
-} from "./createLocalConfigFile";
+  ConfigError,
+  type ConfigOptions,
+  defaults,
+  getConfig,
+  renderQr,
+} from "./config";
 
-const port = process.env.SERVER_PORT || 80;
+export function createServer(options: ConfigOptions = {}): Server {
+  return http.createServer(async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "http://my.dappnode");
+    res.setHeader("Cache-Control", "no-store");
 
-const app = express();
-const corsOptions = {
-  origin: "http://my.dappnode"
-}
-app.use(cors(corsOptions));
-
-// - remote:    '/dappnode_admin'
-// - remote qr: '/dappnode_admin?qr'
-// - local:     '/dappnode_admin?local'
-// - local qr:  '/dappnode_admin?local&qr'
-app.get("/:device", async (req: express.Request, res: express.Response) => {
-  try {
-    const { device } = req.params;
-    // Allow to send `?local` without setting to `?local=1`
-    const local = Boolean(req.query.local) || req.query.local === "";
-    const qr = Boolean(req.query.qr) || req.query.qr === "";
-
-    if (local) {
-      if (qr) throw Error("qr mode not supported in local");
-      const localConfigFile = await createLocalConfigFile(device);
-      res.status(200).send(localConfigFile);
-    } else {
-      const fileExt = qr ? "png" : "conf";
-      const remoteFilePath = getRemoteConfigFilePath(device, fileExt);
-      res.status(200).sendFile(remoteFilePath);
+    if (req.method === "OPTIONS") {
+      res
+        .writeHead(204, {
+          "Access-Control-Allow-Methods": "GET,HEAD",
+          "Access-Control-Allow-Headers":
+            req.headers["access-control-request-headers"] || "",
+        })
+        .end();
+      return;
     }
-  } catch (e) {
-    if (e.code === "ENOENT") res.status(404).send("Not found");
-    else res.status(500).send(e.stack);
+
+    try {
+      const url = new URL(req.url || "/", "http://api.wireguard.dappnode");
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        throw new ConfigError(405, "Method not allowed");
+      }
+      if (url.pathname === "/-/health") {
+        const ready = fs.existsSync(
+          path.join(options.dataDir || defaults.dataDir, ".ready"),
+        );
+        res
+          .writeHead(ready ? 200 : 503)
+          .end(ready ? "OK" : "WireGuard is not ready");
+        return;
+      }
+
+      const encodedDevice = url.pathname.match(/^\/([^/]+)\/?$/)?.[1];
+      if (!encodedDevice) throw new ConfigError(404, "Not found");
+      let device: string;
+      try {
+        device = decodeURIComponent(encodedDevice);
+      } catch {
+        throw new ConfigError(400, "Invalid device");
+      }
+
+      const local = url.searchParams.has("local");
+      const qr = url.searchParams.has("qr");
+      if (local && qr) {
+        throw new ConfigError(
+          400,
+          "QR mode is not supported for local HTTP credentials",
+        );
+      }
+      const config = await getConfig(device, { ...options, local });
+      const body =
+        req.method === "HEAD" ? undefined : qr ? renderQr(config) : config;
+      res.writeHead(200, {
+        "Content-Type": qr ? "image/png" : "text/plain; charset=utf-8",
+      });
+      res.end(body);
+    } catch (error: unknown) {
+      const missing =
+        error instanceof Error && "code" in error && error.code === "ENOENT";
+      const status =
+        error instanceof ConfigError ? error.status : missing ? 404 : 500;
+      const message =
+        error instanceof ConfigError
+          ? error.message
+          : status === 404
+            ? "Not found"
+            : "Unable to read peer configuration";
+      if (!res.headersSent) {
+        res.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
+      }
+      res.end(message);
+    }
+  });
+}
+
+if (require.main === module) {
+  const port = Number(process.env.SERVER_PORT || 80);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("SERVER_PORT must be a valid TCP port");
   }
-});
-
-// Return JSON instead of HTML
-const errorJsonHandler: ErrorRequestHandler = async (err, req, res, next) => {
-  res.status(500).send(err);
-};
-app.use(errorJsonHandler);
-
-const server = app.listen(port, () => console.log(`Listening on port ${port}`));
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-function shutdown() {
-  console.log("Closing server...");
-  server.close((err) => console.log(err || "Bye"));
+  const server = createServer().listen(port, "0.0.0.0", () => {
+    console.log(`Listening on port ${port}`);
+  });
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.on(signal, () => {
+      server.close();
+      server.closeAllConnections();
+    });
+  }
 }

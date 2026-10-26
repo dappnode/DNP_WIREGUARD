@@ -1,4 +1,3 @@
-version: "3.5"
 services:
   wireguard:
     build: .
@@ -7,20 +6,18 @@ services:
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
     environment:
       - PEERS=dappnode_admin
       - SERVERURL=
-      - WIREGUARD_RELEASE=
       - PUID=1000
       - PGID=1000
       - SERVERPORT=51820
+      - LOG_CONFS=false
       - "PEERDNS=172.33.1.2,10.20.0.2"
       - INTERNAL_SUBNET=10.24.0.0
       - "ALLOWEDIPS=172.33.0.0/16,10.20.0.0/24"
     volumes:
       - "wg-config:/config"
-      - "/lib/modules:/lib/modules"
     ports:
       - "51820:51820/udp"
     networks:
@@ -33,7 +30,7 @@ services:
     container_name: DAppNodeCore-api.wireguard.dnp.dappnode.eth
     restart: unless-stopped
     volumes:
-      - "wg-config:/config"
+      - "wg-config:/config:ro"
     networks:
       dncore_network:
         aliases:
