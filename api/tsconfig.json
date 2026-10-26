@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "target": "es5",
-    "sourceMap": true,
-    "esModuleInterop": true,
+    "target": "ES2022",
+    "module": "Node16",
+    "rootDir": ".",
+    "outDir": "dist",
     "strict": true,
-    "outDir": "dist"
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "types": ["node"]
   },
-  "include": ["src/**/*", "test/*"]
+  "include": ["src/**/*.ts"]
 }

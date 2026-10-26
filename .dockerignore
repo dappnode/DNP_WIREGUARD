@@ -1,7 +1,6 @@
 .git
-.gitignore
 .github
-.gitattributes
-READMETEMPLATE.md
-README.md
 api
+node_modules
+**/node_modules
+**/dist

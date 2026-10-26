@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+data=${DATA_DIR:-/config}
+for i in "$@"; do
+    [[ $i =~ ^[a-zA-Z0-9_]+$ ]] || { echo 'Invalid peer name' >&2; exit 1; }
+    if [[ $i =~ ^[0-9]+$ ]]; then peer="peer$i"; else peer="peer_$i"; fi
+    if grep -Fxq "# $peer" "$data/wg_confs/wg0.conf"; then
+        echo "PEER $i QR code:"
+        qrencode -t ANSIUTF8 < "$data/$peer/$peer.conf"
+    else echo "PEER $i is not active"; fi
+done
