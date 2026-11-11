@@ -1,4 +1,4 @@
-FROM node:24.22.1-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS base
+FROM node:24.22.3-alpine3.23 AS base
 WORKDIR /app
 RUN apk add --no-cache libqrencode-tools \
     'ca-certificates>=20261020-r0' 'ca-certificates-bundle>=20261020-r0' && \
