@@ -22,5 +22,12 @@
       "envs": ["HOSTNAME"],
       "services": ["wireguard"]
     }
+  ],
+  "backup": [
+    {
+      "name": "config",
+      "path": "/config",
+      "service": "wireguard"
+    }
   ]
 }
